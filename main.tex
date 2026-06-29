@@ -1,1 +1,1519 @@
+\documentclass[preprint,12pt]{elsarticle}
 
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{lineno}
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{pifont}
+\usepackage{adjustbox}
+\usepackage{booktabs}
+\usepackage{rotating}
+\usepackage{colortbl}
+\usepackage{tabularx}
+\usepackage{makecell}
+\usepackage{threeparttable}
+\usepackage{soul}
+
+\newcommand{\cmark}{\ding{51}}
+\newcommand{\xmark}{\ding{55}}
+\newcommand{\pmark}{\textcolor{orange}{$\sim$}}
+
+\newcommand{\rev}[1]{\textcolor{blue}{#1}}
+\newcommand{\del}[1]{\textcolor{red}{\sout{#1}}}
+
+\journal{Machine Vision and Applications}
+
+\begin{document}
+
+\begin{frontmatter}
+
+%%---------------------------------------------------------------------------
+%%  TITLE
+%%---------------------------------------------------------------------------
+\title{A Transfer Learning Framework for Pneumonia Detection from Chest X-Ray Images Using Custom CNN and MobileNetV2}
+
+%%---------------------------------------------------------------------------
+%%  AUTHOR
+%%---------------------------------------------------------------------------
+\author[label1]{Gajula Tharun Kumar}
+
+\affiliation[label1]{%
+  organization={Department of Data Science, University of Europe for Applied Sciences},
+  addressline={Think Campus, Konrad-Zuse-Ring 11},
+  city={Potsdam},
+  postcode={14469},
+  state={Brandenburg},
+  country={Germany}}
+
+%%---------------------------------------------------------------------------
+%%  ABSTRACT
+%%---------------------------------------------------------------------------
+\begin{abstract}
+Pneumonia is a life-threatening respiratory infection responsible for
+millions of deaths globally each year, disproportionately affecting
+children under five and elderly patients in low-resource settings.
+Timely and accurate diagnosis from chest radiographs is essential yet
+remains constrained by radiologist availability, inter-observer
+variability, and high workload in clinical environments.
+
+Despite substantial progress in deep-learning-based medical image
+classification, most existing studies rely on a single model, neglect
+class imbalance, and provide no visual explanation of model decisions,
+limiting clinical trustworthiness.
+This study addresses the gap by developing a comparative convolutional
+neural network framework for binary pneumonia classification from chest
+X-ray images.
+
+The publicly available Chest X-Ray Images (Pneumonia) dataset from
+Kaggle, containing 5{,}863 images across two classes (NORMAL and
+PNEUMONIA), was used.
+A custom three-block CNN was trained as a baseline and compared with a
+MobileNetV2 transfer-learning model pre-trained on ImageNet.
+Both models were evaluated on an independent held-out test set using
+accuracy, precision, recall, and F1-score.
+
+MobileNetV2 achieved a test accuracy of 88.46\% and a test loss of
+0.2419, outperforming the custom CNN (71.47\% accuracy, loss 0.5932).
+Transfer learning reduced test loss by 59\% and improved generalization
+considerably, particularly for pneumonia recall (0.96 versus 0.55).
+
+This work delivers a reproducible and computationally efficient CNN
+pipeline suitable for pneumonia screening support in resource-constrained
+clinical settings.
+Grad-CAM and SHAP explainability analysis are identified as important
+directions for future work.
+\end{abstract}
+
+%%---------------------------------------------------------------------------
+%%  HIGHLIGHTS
+%%---------------------------------------------------------------------------
+\begin{highlights}
+\item Pneumonia detection from chest X-rays poses critical diagnostic
+      challenges in low-resource clinical settings.
+\item A custom CNN and MobileNetV2 are trained and compared on 5{,}863
+      chest X-ray images across two classes.
+\item MobileNetV2 achieves 88.46\% accuracy, outperforming the custom
+      CNN (71.47\%) by 17 percentage points.
+\item MobileNetV2 achieves 0.96 recall on PNEUMONIA, a clinically
+      critical metric for screening support.
+\item The proposed framework provides an efficient, reproducible pipeline
+      deployable in resource-constrained environments.
+\end{highlights}
+
+%%---------------------------------------------------------------------------
+%%  KEYWORDS
+%%---------------------------------------------------------------------------
+\begin{keyword}
+Pneumonia detection \sep
+Chest X-ray classification \sep
+Convolutional neural network \sep
+Transfer learning \sep
+MobileNetV2 \sep
+Deep Learning
+\end{keyword}
+
+\end{frontmatter}
+
+\linenumbers
+
+%%===========================================================================
+\section{Introduction}
+%%===========================================================================
+The Introduction establishes the clinical problem, motivates the use of
+CNN-based image analysis, identifies the research gap, and states the
+exact contributions of this study.
+
+%%---------------------------------------------------------------------------
+\subsection{Application Background and Practical Importance}
+%%---------------------------------------------------------------------------
+Pneumonia is an acute lower respiratory infection caused by bacteria,
+viruses, or fungi that inflame the air sacs in one or both lungs,
+causing them to fill with fluid or pus.
+It is among the leading causes of death worldwide, responsible for
+approximately 2.5 million fatalities annually, with the burden
+concentrated in sub-Saharan Africa and South Asia~\cite{reshan2023}.
+Children under the age of five account for over 700{,}000 pneumonia
+deaths per year, making it the single largest infectious cause of child
+mortality globally~\cite{liang2020}.
+Early and accurate diagnosis is essential for timely antibiotic or
+antiviral treatment, yet access to trained radiologists is severely
+limited in many high-burden regions~\cite{rajpurkar2017chexnet}.
+The gold standard for pneumonia diagnosis is expert interpretation of
+chest radiographs, which requires considerable clinical skill and
+introduces significant inter-observer variability~\cite{hashmi2020}.
+In high-volume emergency settings, radiologists may be required to
+interpret hundreds of images per shift, increasing the risk of
+diagnostic error~\cite{chouhan2020}.
+Automated image analysis systems capable of reliably flagging pneumonia
+on chest X-rays could reduce workload, accelerate triage, and extend
+diagnostic reach to underserved populations~\cite{rajpurkar2017chexnet}.
+Such systems are particularly valuable in resource-constrained hospitals
+where 24-hour radiologist coverage is unavailable.
+
+%%---------------------------------------------------------------------------
+\subsection{Machine Learning and Computer Vision Context}
+%%---------------------------------------------------------------------------
+Convolutional neural networks (CNNs) have transformed medical image
+analysis by learning hierarchical visual representations directly from
+raw pixel data without hand-crafted feature engineering~\cite{krizhevsky2012}.
+Successive convolutional layers detect progressively abstract patterns,
+from edges and textures in early layers to organ-level structures in
+deeper layers, making them well suited to radiographic analysis.
+Unlike traditional machine-learning pipelines that require domain
+experts to define features manually, CNNs adapt their internal
+representations to the specific statistics of the training dataset.
+Local receptive fields allow CNNs to capture spatially localized
+pathological changes such as lung opacities, consolidations, and
+infiltrates that are hallmarks of pneumonia on chest X-rays.
+The spatial parameter sharing of convolutional layers also reduces the
+number of learnable parameters compared with fully connected networks,
+partially mitigating overfitting on small medical datasets.
+However, training a deep CNN from random initialization typically
+requires tens of thousands of labeled examples, which are difficult and
+expensive to obtain in the medical domain due to the need for expert
+annotation and patient privacy constraints~\cite{huang2017densenet}.
+These challenges make transfer learning particularly attractive for
+medical imaging applications.
+
+%%---------------------------------------------------------------------------
+\subsection{Transfer Learning for Pneumonia Detection}
+%%---------------------------------------------------------------------------
+Transfer learning exploits visual representations learned on large
+general-purpose datasets, most commonly ImageNet with over 1.2 million
+labeled images, and adapts them to a target domain with limited
+labeled data~\cite{liang2020}.
+Pre-trained models encode low-level features such as edge detectors and
+color gradients that transfer well across visual domains, including
+natural images and radiographs.
+By freezing the backbone weights and training only a newly attached
+classification head, it is possible to achieve strong performance even
+when fewer than a few thousand domain-specific labeled images are
+available.
+Fine-tuning subsequently unfreezes deeper backbone layers and allows
+the model to specialize to domain-specific features at a lower learning
+rate.
+MobileNetV2 is particularly attractive for medical applications because
+its inverted residual blocks and linear bottlenecks achieve competitive
+accuracy with a fraction of the parameters of heavier architectures
+such as VGG16 or InceptionV3, enabling deployment on
+resource-constrained hardware~\cite{mobilenetv2}.
+The depthwise separable convolutions in MobileNetV2 reduce computation
+by factorizing standard convolutions, making inference fast enough for
+real-time clinical screening tools.
+Selecting the appropriate architecture and fine-tuning strategy
+requires systematic comparison, which existing studies in this domain
+have not consistently provided.
+
+%%---------------------------------------------------------------------------
+\subsection{Deep Learning and Clinical Trustworthiness}
+%%---------------------------------------------------------------------------
+Accuracy alone is insufficient to establish trust in a clinical
+decision-support system; clinicians and regulators require
+interpretable evidence that a model reasons correctly~\cite{reshan2023}.
+A model may achieve high test accuracy by exploiting spurious
+correlations in the training data, such as scanner artifacts, patient
+positioning labels, or demographic confounders, rather than true
+pathological features~\cite{chouhan2020}.
+Gradient-weighted Class Activation Mapping (Grad-CAM) produces
+class-specific heatmaps by computing the gradient of the predicted
+class score with respect to the final convolutional feature maps,
+allowing visualization of which spatial regions drove the prediction.
+SHAP (SHapley Additive exPlanations) assigns pixel-level or
+superpixel-level contribution scores based on cooperative game theory,
+indicating both the magnitude and direction of each region's influence
+on the output.
+In a medical setting, false negatives carry severe clinical
+consequences; a model that misses pneumonia in a critically ill patient
+may delay life-saving treatment.
+Explainability methods therefore serve not only as debugging tools but
+as a fundamental component of the clinical validation pipeline.
+
+%%---------------------------------------------------------------------------
+\subsection{Research Gap}
+%%---------------------------------------------------------------------------
+Despite the large body of work on deep learning for chest X-ray
+analysis, several important methodological gaps remain.
+Most published studies evaluate only a single model or compare models
+without controlling for dataset splitting, augmentation strategy, or
+class-imbalance treatment, making cross-study comparisons
+unreliable~\cite{rajpurkar2017chexnet,hashmi2020}.
+The severe class imbalance present in the standard chest X-ray
+pneumonia dataset (approximately 3.9:1 pneumonia-to-normal ratio in
+training) is rarely addressed explicitly, risking models that optimize
+for majority-class accuracy.
+Deep Learning methods are applied in relatively few studies, and where
+they are used, explanation quality is rarely assessed
+systematically~\cite{reshan2023}.
+Computational efficiency is seldom reported despite its importance for
+deployment in low-resource hospitals.
+
+%%---------------------------------------------------------------------------
+\subsection{Problem Statement}
+%%---------------------------------------------------------------------------
+This study addresses the problem of automatically classifying chest
+X-ray images into NORMAL and PNEUMONIA categories using a comparative
+CNN-based framework.
+The study investigates whether transfer learning with MobileNetV2 can
+improve predictive performance over a custom CNN while maintaining
+computational efficiency, and identifies explainability analysis as a
+direction for future work.
+
+%%---------------------------------------------------------------------------
+\subsection{Aim and Objectives}
+%%---------------------------------------------------------------------------
+The aim of this study is to develop and evaluate a CNN-based framework
+for the reliable binary classification of chest X-ray images into
+NORMAL and PNEUMONIA classes.
+
+The specific objectives are:
+\begin{itemize}
+  \item to analyze and preprocess the Chest X-Ray Images (Pneumonia)
+        dataset, including class distribution, image quality, and
+        augmentation design;
+  \item to develop a custom three-block CNN as a reproducible baseline;
+  \item to implement MobileNetV2 with frozen-backbone transfer learning
+        and a custom classification head;
+  \item to compare both models using accuracy, precision, recall,
+        F1-score, loss, training time, and parameter count;
+  \item to evaluate training convergence, stability, and signs of
+        overfitting on validation curves;
+  \item to assess limitations, deployment suitability, and practical
+        clinical value of the best-performing model.
+\end{itemize}
+
+%%---------------------------------------------------------------------------
+\subsection{Research Questions}
+%%---------------------------------------------------------------------------
+\begin{itemize}
+  \item \textbf{RQ1:} How does preprocessing and augmentation affect
+        the quality and class balance of the chest X-ray dataset, and
+        what are the characteristics of the training, validation, and
+        test splits?
+  \item \textbf{RQ2:} Which model, the custom CNN or MobileNetV2,
+        achieves superior overall predictive performance on the held-out
+        test set, and by how much?
+  \item \textbf{RQ3:} How reliably does each model classify individual
+        classes, and what error patterns appear in the confusion
+        matrices and class-level metrics?
+  \item \textbf{RQ4:} How do the two models compare in terms of
+        computational efficiency, including parameter count, training
+        time, and model size, and which is more suitable for deployment
+        in resource-constrained clinical environments?
+\end{itemize}
+
+%%---------------------------------------------------------------------------
+\subsection{Contributions and Novelty}
+%%---------------------------------------------------------------------------
+This study contributes the following:
+\begin{itemize}
+  \item A fully reproducible comparative experimental pipeline
+        evaluating a custom CNN and MobileNetV2 on the same dataset
+        split, preprocessing strategy, and evaluation protocol.
+  \item Systematic class-level reliability analysis including per-class
+        precision, recall, F1-score, and confusion matrix decomposition,
+        enabling identification of clinically high-risk error types.
+  \item An efficiency-performance trade-off analysis including parameter
+        count, model file size, and test loss, to support deployment
+        decision-making in resource-limited settings.
+  \item A critically assessed discussion of limitations, dataset bias,
+        and practical deployment considerations relevant to clinical
+        radiograph screening.
+\end{itemize}
+
+%%---------------------------------------------------------------------------
+\subsection{Report Organization}
+%%---------------------------------------------------------------------------
+The remainder of this report is structured as follows.
+Section~2 reviews the relevant literature on deep learning for chest
+X-ray analysis, transfer learning architectures, preprocessing methods,
+and model evaluation.
+Section~3 describes the complete methodology including dataset
+description, preprocessing, model architectures, training procedure,
+and evaluation framework.
+Section~4 presents the experimental results organized by research
+question.
+Section~5 interprets the results, discusses limitations, compares
+findings with the literature, and addresses practical and ethical
+implications.
+Section~6 concludes the study.
+
+%%===========================================================================
+\section{Literature Review}
+%%===========================================================================
+
+%%---------------------------------------------------------------------------
+\subsection{Image-Based Machine Learning in Medical Imaging}
+%%---------------------------------------------------------------------------
+Machine learning has progressively transformed medical image analysis
+over the past two decades, evolving from hand-crafted feature pipelines
+to end-to-end learned representations.
+Early approaches relied on domain-expert-designed descriptors such as
+histogram of oriented gradients, local binary patterns, and Gabor
+filters combined with support vector machines or random forests, which
+required substantial engineering effort and did not generalize well
+across imaging modalities~\cite{krizhevsky2012}.
+The introduction of deep convolutional neural networks, popularized by
+AlexNet's performance on ImageNet in 2012, demonstrated that
+hierarchical feature learning from raw pixel data could surpass
+hand-crafted approaches on large-scale visual recognition
+tasks~\cite{krizhevsky2012}.
+This insight rapidly transferred to the medical domain: CNNs were
+applied to dermoscopy, histopathology, ophthalmology, and radiology,
+consistently outperforming classical methods when sufficient labeled
+data were available.
+Chest radiograph analysis has been a particularly active area, driven
+by the clinical prevalence of chest X-rays and the availability of
+large annotated datasets~\cite{rajpurkar2017chexnet}.
+Rajpurkar et al.\ demonstrated that a 121-layer DenseNet could
+detect pneumonia on chest X-rays at a level exceeding the average
+performance of radiologists on several pathology classes~\cite{rajpurkar2017chexnet}.
+Subsequent work confirmed that model performance scales with dataset
+size and architecture depth, but also revealed that small or
+single-institution datasets introduce overfitting and limit
+generalizability~\cite{hashmi2020}.
+The reliance on large labeled corpora remains a fundamental constraint
+in medical imaging, motivating the adoption of transfer learning,
+semi-supervised learning, and data augmentation as practical
+mitigations~\cite{reshan2023}.
+Recent surveys confirm that transfer learning from ImageNet
+consistently outperforms training from scratch on medical imaging
+benchmarks of fewer than 10{,}000 labeled samples~\cite{liang2020}.
+
+%%---------------------------------------------------------------------------
+\subsection{CNN-Based Methods for Chest X-Ray Classification}
+%%---------------------------------------------------------------------------
+A substantial body of literature applies CNN-based classification to
+the Kermany chest X-ray dataset, and several consistent patterns
+emerge across these studies.
+Transfer learning with architectures pre-trained on ImageNet is the
+dominant approach: VGG16, ResNet50, InceptionV3, DenseNet121, and
+MobileNet variants are the most frequently used backbones, and
+virtually all reported results from frozen or fine-tuned pre-trained
+models outperform custom CNNs trained from
+scratch~\cite{chouhan2020,liang2020,reshan2023}.
+Reported test accuracies on the binary NORMAL/PNEUMONIA task cluster
+between 85\% and 96\% across these studies, but direct comparison is
+complicated by inconsistent dataset splitting: some studies use the
+original Kaggle split while others reshuffle the data or apply
+cross-validation, making reported figures non-comparable~\cite{hashmi2020}.
+Class imbalance, present at approximately 2.9:1 in the original
+training split, is addressed inconsistently: some studies apply
+class-weighted loss or oversampling while others ignore it entirely,
+a methodological inconsistency that likely inflates reported accuracy
+figures by rewarding majority-class prediction~\cite{reshan2023}.
+Augmentation strategies vary widely, with most studies applying
+rotation, zoom, and horizontal flip but rarely justifying specific
+parameter choices with respect to chest radiograph
+anatomy~\cite{chouhan2020}.
+Evaluation is frequently limited to overall accuracy, with fewer
+studies reporting per-class precision, recall, and F1-score; this
+is a significant limitation in a clinical task where false negative
+rate for the minority pathology class is the most safety-critical
+metric~\cite{hashmi2020}.
+Across the reviewed studies, models achieving high overall accuracy
+sometimes exhibit substantially degraded recall on the NORMAL class
+or vice versa, confirming that single-metric evaluation is
+insufficient for clinical assessment.
+
+%%---------------------------------------------------------------------------
+\subsection{Transfer Learning Architectures}
+%%---------------------------------------------------------------------------
+MobileNetV2, introduced by Sandler et al., is built around inverted
+residual blocks in which the input and output of each block are
+narrow low-dimensional bottleneck layers while the internal expansion
+uses a wider high-dimensional representation~\cite{mobilenetv2}.
+Within each block, depthwise separable convolutions factorize the
+standard convolution into a depthwise spatial filter followed by a
+pointwise $1 \times 1$ convolution, reducing the number of multiply-add
+operations by a factor of approximately 8 to 9 compared with a
+standard convolution of equal depth~\cite{mobilenetv2}.
+Linear bottleneck activations are used at the residual connection
+endpoints to preserve information in the low-dimensional manifold,
+avoiding the information loss caused by applying ReLU to low-rank
+representations.
+Trained on ImageNet with 1.2 million images and 1000 classes,
+MobileNetV2 achieves 72\% top-1 accuracy with only 3.4 million
+parameters, making it competitive with substantially heavier models.
+When the classification head is removed and the backbone is used as a
+feature extractor, the final convolutional feature map encodes rich
+multi-scale visual representations that generalize well to domain-
+shifted inputs including medical images.
+
+ResNet50~\cite{he2016resnet} introduced residual skip connections that
+allow gradients to bypass convolutional blocks, enabling stable
+training of networks with 50 or more layers.
+Its 25 million parameters provide a larger representational capacity
+than MobileNetV2, which yields marginal accuracy gains on large
+datasets but increases inference cost and memory consumption.
+DenseNet121~\cite{huang2017densenet} connects each layer to all
+subsequent layers within a dense block, encouraging feature reuse and
+reducing the need for redundant parameter learning; it has been widely
+adopted for chest X-ray analysis following its use in CheXNet~\cite{rajpurkar2017chexnet}.
+For the present study, MobileNetV2 was selected over ResNet50 and
+DenseNet121 because its substantially smaller parameter count and
+lower inference cost are better aligned with the goal of deployment
+in resource-constrained clinical settings.
+
+%%---------------------------------------------------------------------------
+\subsection{Data Preprocessing and Augmentation}
+%%---------------------------------------------------------------------------
+Consistent preprocessing is essential for both training stability and
+fair model comparison.
+Resizing all images to a fixed spatial dimension eliminates variability
+introduced by different acquisition devices and ensures that the
+convolutional receptive field covers a consistent anatomical extent;
+$224 \times 224$ pixels is the standard input size for ImageNet-
+pretrained architectures including MobileNetV2~\cite{mobilenetv2}.
+Pixel normalization to the range $[0, 1]$ or $[-1, 1]$ ensures that
+activation magnitudes remain in a regime where gradient-based
+optimization is numerically stable, and is standard practice across
+CNN-based medical imaging pipelines~\cite{shorten2019}.
+Data augmentation artificially expands the effective training set size
+by applying stochastic geometric and photometric transformations,
+reducing overfitting when the labeled dataset is small.
+In the context of chest radiographs, clinically plausible
+augmentations include small rotations to simulate patient positioning
+variability, zoom to account for differences in field of view and
+patient size, and width and height shifts to tolerate variation in
+lung centering~\cite{shorten2019}.
+Horizontal flip is appropriate for frontal chest radiographs because
+the overall lung pattern is approximately symmetric and the left-right
+orientation does not reliably distinguish pathology from health.
+Vertical flip is contraindicated for chest X-rays because the
+superior-inferior anatomical orientation is diagnostically meaningful:
+the lung apices, bases, costophrenic angles, and cardiac silhouette
+each carry distinct diagnostic information that a vertically flipped
+image would misrepresent~\cite{chouhan2020}.
+Color jitter and grayscale inversion are generally avoided in
+radiograph augmentation because radiographic intensity values encode
+tissue density and inverting them removes physically meaningful
+contrast relationships.
+The appropriate magnitude of augmentation parameters should be
+calibrated to the expected range of clinical variation; overly
+aggressive augmentation introduces unrealistic image distortions
+that impair rather than improve generalization.
+
+%%---------------------------------------------------------------------------
+\subsection{Model Evaluation and Reliability}
+%%---------------------------------------------------------------------------
+The choice of evaluation metric has significant consequences for how
+model performance is interpreted, particularly in clinically imbalanced
+binary classification tasks.
+Overall accuracy, defined as the proportion of correctly classified
+samples, is sensitive to class imbalance: a model that predicts the
+majority class for every input will achieve high accuracy on a dataset
+where one class predominates, yet provide no clinical utility~\cite{hashmi2020}.
+Precision and recall decompose predictive performance at the class
+level: precision measures the fraction of positive predictions that
+are correct, while recall (sensitivity) measures the fraction of true
+positive cases that are detected.
+In pneumonia screening, recall for the PNEUMONIA class is the
+safety-critical metric because a false negative represents a missed
+diagnosis; a low-recall model would fail patients who require
+immediate treatment~\cite{reshan2023}.
+The F1-score is the harmonic mean of precision and recall and provides
+a single class-level summary that penalizes extreme imbalances between
+the two, making it more informative than accuracy alone on imbalanced
+datasets.
+Specificity complements sensitivity by quantifying the rate of correct
+normal classifications, which is relevant for managing unnecessary
+referrals in a screening context.
+Area under the receiver operating characteristic curve (AUC)
+characterizes model discrimination across all possible classification
+thresholds and is threshold-independent, making it useful for comparing
+models whose optimal operating threshold may differ.
+The confusion matrix provides the complete joint distribution of
+predicted and true labels and is the most transparent summary of
+classification behavior, enabling identification of which specific
+error types (false positives or false negatives) dominate model
+failure~\cite{hashmi2020}.
+Several reviewed studies report only overall accuracy, which obscures
+class-level error patterns and risks overstating clinical utility;
+per-class metrics and confusion matrices should be considered the
+minimum reporting standard for medical classification models.
+
+%%---------------------------------------------------------------------------
+\subsection{Deep Learning in Medical Image Analysis}
+%%---------------------------------------------------------------------------
+Deep Learning methods for image classification generate visual or
+numerical evidence of which input regions or features drove a model's
+prediction, addressing the opacity of deep neural networks that
+otherwise function as black boxes~\cite{reshan2023}.
+In medical imaging, explainability serves both a quality-assurance
+function, confirming that the model attends to anatomically relevant
+structures, and a regulatory function, providing the evidence required
+for clinician trust and institutional adoption.
+
+Gradient-weighted Class Activation Mapping (Grad-CAM) computes a
+class-discriminative localization map by taking the global average of
+the gradients of the predicted class score with respect to the
+activations of a target convolutional layer, then forming a weighted
+sum of those feature maps~\cite{chouhan2020}.
+The resulting heatmap is upsampled to input resolution and overlaid
+on the original image, highlighting spatial regions that contributed
+most to the prediction.
+Grad-CAM is widely applied to chest X-ray models because it requires
+no architectural modification and is computationally inexpensive;
+however, its spatial resolution is limited by the stride of the target
+convolutional layer, so fine-grained localization of small lesions
+may be imprecise~\cite{reshan2023}.
+In chest X-ray studies, Grad-CAM maps have been used to confirm that
+correctly classified pneumonia cases show activation in the lung
+fields, while misclassified cases sometimes show spurious activation
+in background regions, suggesting shortcut learning.
+
+SHAP (SHapley Additive exPlanations) assigns a contribution score to
+each feature based on its average marginal contribution across all
+possible subsets of features, grounded in cooperative game theory.
+For image models, DeepSHAP or GradientSHAP propagate SHAP values
+through the network layers, producing pixel-level or superpixel-level
+attribution maps that indicate both the magnitude and direction of
+each region's influence on the output~\cite{reshan2023}.
+Unlike Grad-CAM, SHAP values can be negative, identifying regions
+that suppressed the predicted class probability, which provides
+richer diagnostic information.
+The principal limitation of SHAP for deep image models is
+computational cost: exact Shapley value computation is exponential
+in the number of features, and approximations require careful
+selection of background reference samples.
+
+Despite the availability of these methods, their application in chest
+X-ray studies remains inconsistent.
+Heatmaps that appear anatomically plausible do not guarantee correct
+clinical reasoning; a model may highlight lung regions for the wrong
+reason, and agreement between Grad-CAM and SHAP does not constitute
+clinical validation~\cite{hashmi2020}.
+Domain-expert radiologist assessment of explanation outputs is the
+gold standard for evaluating explanation quality, yet this step is
+absent from the majority of published studies.
+
+%%---------------------------------------------------------------------------
+\subsection{Robustness, Generalization, and Deployment}
+%%---------------------------------------------------------------------------
+Generalization to unseen data distributions is a fundamental challenge
+for medical imaging models trained on single-institution datasets.
+Performance degradation under domain shift, caused by differences in
+scanner manufacturer, acquisition protocol, patient demographics, or
+image processing pipeline, has been documented across multiple medical
+imaging tasks and is a principal obstacle to real-world
+deployment~\cite{hashmi2020}.
+Models trained exclusively on the Kaggle chest X-ray dataset, which
+originates from a single pediatric hospital in Guangzhou, China, may
+not generalize to data from adult populations or different geographic
+regions without retraining or domain adaptation.
+Robustness to common image degradations such as Gaussian noise,
+motion blur, and low contrast has been studied in natural image
+classification but is rarely evaluated in chest X-ray
+studies~\cite{reshan2023}.
+Such degradations are clinically relevant because radiograph quality
+varies with equipment calibration, patient cooperation, and technical
+factors, and a model deployed in a resource-constrained setting may
+encounter images of lower quality than those in the training set.
+
+Deployment feasibility depends critically on model size, inference
+latency, and hardware requirements.
+Lightweight architectures such as MobileNetV2 were specifically
+designed for inference on mobile and embedded processors, and their
+depthwise separable convolution blocks reduce multiply-add operations
+sufficiently for real-time inference on CPU-only
+hardware~\cite{mobilenetv2}.
+By contrast, larger models such as VGG16 (138 million parameters) or
+ResNet50 (25 million parameters) require GPU acceleration for
+acceptable inference speed, limiting their applicability in hospitals
+with no dedicated AI hardware.
+Model file size also matters for deployment: quantized MobileNetV2
+models compressed to 8-bit integer weights can be stored and loaded
+on devices with limited flash memory.
+Few chest X-ray classification studies report inference latency or
+model file size, leaving deployment feasibility as an unaddressed
+gap in the majority of the published literature.
+
+%%---------------------------------------------------------------------------
+\subsection{Comparative Literature Review Matrix}
+%%---------------------------------------------------------------------------
+
+Table~\ref{tab:literature_matrix}Table summarizes representative studies on deep-learning-based chest X-ray
+classification.
+The comparison reveals that most studies use the same Kaggle
+chest X-ray dataset but differ substantially in model choice,
+augmentation strategy, and evaluation protocol.
+Transfer learning is widely adopted, yet fewer than half of the
+reviewed studies apply any class-imbalance treatment.
+Explainability methods are present in only a minority of studies.
+Robustness testing and external validation are almost universally
+absent, and statistical testing between models is rarely reported.
+Efficiency analysis is present in some lightweight-model studies but
+absent from most classification papers.
+The proposed study directly addresses these gaps by combining a custom
+CNN baseline, MobileNetV2 transfer learning, class-weight balancing,
+efficiency reporting, and class-level error analysis within a single
+reproducible pipeline.
+
+\begin{sidewaystable}[p]
+\centering
+\tiny
+\caption{Comparative literature review matrix summarizing datasets,
+models, evaluation practices, explainability, robustness, and
+validation strategies in closely related chest X-ray classification
+studies using deep learning. Symbols: \cmark~feature explicitly
+included; \xmark~feature not included; \pmark~partially included or
+unclear. TL: Transfer Learning; CB: Class Balancing; MC:
+Multiple-Model Comparison; GC: Grad-CAM; SH: SHAP; RT: Robustness
+Testing; EV: External Validation; ST: Statistical Testing; EA:
+Efficiency Analysis.}
+\label{tab:literature_matrix}
+\begin{tabular}{p{1.5cm} p{1.7cm} p{1.3cm} c p{1.1cm} p{1.7cm}
+                c c c c c c c c c p{1.6cm} p{2.3cm} p{2.3cm}}
+\toprule
+\textbf{Study} & \textbf{Problem} & \textbf{Dataset} &
+\textbf{Classes} & \textbf{Size} & \textbf{Models} &
+\textbf{TL} & \textbf{CB} & \textbf{MC} & \textbf{GC} &
+\textbf{SH} & \textbf{RT} & \textbf{EV} & \textbf{ST} &
+\textbf{EA} & \textbf{Metrics} & \textbf{Main Contribution} &
+\textbf{Principal Limitation} \\
+\midrule
+
+Chouhan et al.\ \cite{chouhan2020}, 2020 &
+  Pneumonia classification &
+  Chest X-Ray (Kaggle) & 2 & 5{,}863 &
+  VGG16 &
+  \cmark & \xmark & \xmark & \cmark & \xmark &
+  \xmark & \xmark & \xmark & \xmark &
+  Acc, F1 &
+  Fine-tuned VGG16 for binary pneumonia &
+  No class balancing; no SHAP; single model \\
+
+Liang \& Zheng\ \cite{liang2020}, 2020 &
+  Pneumonia detection &
+  Chest X-Ray (Kaggle) & 2 & 5{,}863 &
+  ResNet50 &
+  \cmark & \pmark & \xmark & \cmark & \xmark &
+  \xmark & \xmark & \xmark & \pmark &
+  Acc, AUC &
+  ResNet50 with custom augmentation &
+  No SHAP; accuracy-only primary metric \\
+
+Reshan et al.\ \cite{reshan2023}, 2023 &
+  Lung disease classification &
+  Chest X-Ray (Kaggle) & 2 & 5{,}863 &
+  DenseNet121 &
+  \cmark & \cmark & \cmark & \cmark & \xmark &
+  \xmark & \cmark & \xmark & \xmark &
+  AUC per class &
+  Multi-label classification with class weights &
+  No SHAP; no efficiency analysis \\
+
+\midrule
+\textbf{Proposed study} &
+  Binary pneumonia classification &
+  Chest X-Ray (Kaggle) & 2 & 5{,}863 &
+  Custom CNN, MobileNetV2 &
+  \cmark & \cmark & \cmark & \xmark & \xmark &
+  \xmark & \xmark & \xmark & \cmark &
+  Acc, Prec, Rec, F1, Loss &
+  Comparative framework with class-level error analysis &
+  Single public dataset; no XAI implemented; no external validation \\
+
+\bottomrule
+\end{tabular}
+\end{sidewaystable}
+
+%%---------------------------------------------------------------------------
+\subsection{Synthesis of Literature and Identified Gap}
+%%---------------------------------------------------------------------------
+The reviewed literature establishes that CNN-based transfer learning
+is an effective approach to binary pneumonia classification from chest
+radiographs, with MobileNetV2 and related lightweight architectures
+offering a favorable balance of accuracy and computational efficiency.
+However, four methodological gaps recur consistently across the
+reviewed studies and motivate the design of the present work.
+
+First, most studies evaluate models on non-standard or unreported
+dataset splits, precluding meaningful cross-study accuracy comparison.
+This study addresses the gap by using the original Kaggle train/test
+split without reshuffling and reporting all metrics on the fixed
+held-out test set.
+
+Second, class-imbalance treatment is inconsistent or absent, leading
+to models that optimize majority-class accuracy at the expense of
+minority-class recall, which is the clinically critical metric.
+This study addresses the gap by applying class-weight compensation
+and reporting per-class precision, recall, and F1-score alongside
+overall accuracy.
+
+Third, comparative evaluation of a custom CNN baseline against a
+transfer-learning model under identical experimental conditions is
+uncommon; most studies present only one architecture.
+This study addresses the gap by training both models on the same data
+split with identical preprocessing, augmentation, optimizer, and
+evaluation protocol.
+
+Fourth, efficiency metrics including parameter count, trainable
+parameter count, and training duration are rarely reported despite
+their importance for deployment in low-resource settings.
+This study addresses the gap by recording and reporting these values
+for both models.
+
+The absence of Grad-CAM and SHAP explainability analysis in the
+current implementation is acknowledged as a limitation and is
+identified as the highest-priority direction for future work,
+consistent with the consensus in the reviewed literature that
+explainability is essential for clinical trust.
+The methodology is described in full in Section~3.
+
+%%===========================================================================
+\section{Methodology}
+%%===========================================================================
+
+%%---------------------------------------------------------------------------
+\subsection{Research Design}
+%%---------------------------------------------------------------------------
+This study follows a quantitative experimental design in which a
+custom CNN and a MobileNetV2 transfer-learning model are independently
+trained, validated, and evaluated on the same dataset split using
+identical preprocessing and evaluation protocols.
+The image task is binary classification (NORMAL versus PNEUMONIA) from
+frontal chest radiographs.
+Computational efficiency is reported alongside predictive performance
+to support deployment decision-making.
+
+\begin{figure*}[!ht] \centering \includegraphics[width=\textwidth]{Figures/workflow.png} \caption{Overall workflow of the proposed pneumonia detection system. The workflow consists of dataset collection, preprocessing, data augmentation, model development using a Custom CNN and MobileNetV2, model training, evaluation using classification metrics and confusion matrices, and final performance comparison.} \label{fig:workflow} \end{figure*}
+
+%%---------------------------------------------------------------------------
+\subsection{Dataset Description}
+%%---------------------------------------------------------------------------
+
+\subsubsection{Dataset Source and Accessibility}
+The Chest X-Ray Images (Pneumonia) dataset was originally published
+by Kermany et al.~\cite{kermany2018} and is publicly accessible on
+Kaggle at
+\url{https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia}.
+The dataset was accessed in 2024 under a CC BY 4.0 license and used
+without modification to the original class labels.
+It was selected because it is the most widely used public benchmark
+for binary pneumonia classification from chest radiographs, enabling
+direct comparison with existing literature.
+
+\subsubsection{Dataset Composition}
+The dataset contains 5{,}863 chest X-ray images in JPEG format across
+two classes: NORMAL and PNEUMONIA.
+The images are organized into pre-defined training, validation, and
+test folders, with 5{,}216 images in training, 16 images in validation,
+and 624 images in test.
+Training images consist of 1{,}341 NORMAL and 3{,}875 PNEUMONIA
+samples, representing a class imbalance ratio of approximately 2.9:1.
+Test images consist of 234 NORMAL and 390 PNEUMONIA samples.
+Image resolutions vary across the dataset; all images are resized to
+$224 \times 224$ pixels for model input.
+Images are grayscale radiographs but are loaded as three-channel RGB
+to match the expected input format of MobileNetV2.
+
+\subsubsection{Class Definitions}
+The NORMAL class contains chest radiographs from individuals with no
+evidence of pulmonary infection, showing clear lung fields without
+consolidation, infiltrates, or ground-glass opacities.
+The PNEUMONIA class contains radiographs exhibiting pathological
+findings consistent with bacterial or viral pneumonia, including
+patchy consolidation, air bronchograms, and diffuse bilateral
+infiltrates; the class includes both bacterial and viral subtypes
+without a separate sub-label.
+
+\subsubsection{Dataset Quality Assessment}
+The training split exhibits a significant class imbalance, with
+PNEUMONIA images outnumbering NORMAL images by a ratio of approximately
+2.9:1, which could bias a model toward predicting the majority class.
+The validation split contains only 16 images, which is insufficient for
+reliable epoch-by-epoch model selection; this limitation is inherited
+from the original dataset structure.
+No corrupt or unreadable image files were identified during initial
+loading.
+Some images exhibit variation in patient positioning, lung field
+cropping, and radiograph exposure, which are representative of
+real-world clinical variation.
+
+\subsubsection{Dataset Visualization}
+\begin{figure}[!ht] \centering \includegraphics[width=0.8\linewidth]{Figures/dataset_samples.png} \caption{Sample chest X-ray images from the NORMAL and PNEUMONIA classes.} \label{fig:dataset_samples} \end{figure}
+
+%%---------------------------------------------------------------------------
+\subsection{Data Preparation}
+%%---------------------------------------------------------------------------
+
+\subsubsection{Data Cleaning}
+All images were verified to be readable using TensorFlow's
+\texttt{ImageDataGenerator}; no corrupted or unreadable files were
+identified and no images were excluded.
+Class labels were confirmed to match the folder structure provided by
+the original dataset.
+
+\subsubsection{Data Splitting}
+The original pre-defined training, validation, and test folder
+structure was retained.
+Training images (5{,}216) were used for model fitting with
+augmentation.
+The 16-image validation set was used for epoch-level monitoring.
+The 624-image test set was treated as the independent held-out
+evaluation set and was never used during training or hyperparameter
+selection.
+No augmented versions of test images were created, preventing data
+leakage.
+
+\subsubsection{Image Preprocessing}
+All images were resized to $224 \times 224$ pixels to match the input
+requirements of MobileNetV2 and to provide a consistent input size for
+the custom CNN.
+Pixel values were normalized to the range $[0, 1]$ by dividing by 255,
+following standard practice for CNN training.
+Images were loaded in RGB color mode (three channels) using
+\texttt{class\_mode='binary'} to produce binary class labels.
+No additional contrast enhancement or histogram equalization was
+applied, in order to preserve the natural radiographic intensity
+distribution.
+
+\subsubsection{Data Augmentation}
+Augmentation was applied exclusively to the training set using
+TensorFlow's \texttt{ImageDataGenerator} with the following
+transformations and parameter ranges~\cite{shorten2019}:
+\begin{itemize}
+  \item Rotation: up to $\pm 15^{\circ}$, to simulate variability in
+        patient positioning;
+  \item Zoom: up to 20\%, to handle variation in magnification;
+  \item Width shift: up to 10\% of image width, to tolerate lateral
+        positioning variation;
+  \item Height shift: up to 10\% of image height, to tolerate
+        superior-inferior shift;
+  \item Horizontal flip: enabled, as left-right orientation does not
+        carry diagnostic meaning in frontal chest radiographs.
+\end{itemize}
+Vertical flip was not applied because superior-inferior lung anatomy
+carries meaningful diagnostic information.
+Augmentation was performed on-the-fly during training, so no
+augmented images were stored on disk.
+
+\subsubsection{Class-Imbalance Handling}
+To address the 2.9:1 training-set imbalance, class weights were
+computed as inversely proportional to class frequency and passed to
+the \texttt{fit()} function, penalizing misclassification of the
+minority NORMAL class more heavily.
+
+%%---------------------------------------------------------------------------
+\subsection{Model Development}
+%%---------------------------------------------------------------------------
+
+\subsubsection{Custom CNN Baseline}
+The custom CNN was designed as a three-block sequential architecture
+with increasing filter depth.
+The input shape is $(224, 224, 3)$.
+Block 1 consists of a \texttt{Conv2D} layer with 32 filters of size
+$3 \times 3$ and ReLU activation, followed by \texttt{MaxPooling2D}
+with pool size $2 \times 2$.
+Block 2 consists of a \texttt{Conv2D} layer with 64 filters and ReLU
+activation, followed by \texttt{MaxPooling2D}.
+Block 3 consists of a \texttt{Conv2D} layer with 128 filters and ReLU
+activation, followed by \texttt{MaxPooling2D} and
+\texttt{BatchNormalization}.
+The feature maps are then flattened and passed to a fully connected
+\texttt{Dense} layer with 128 units and ReLU activation.
+A \texttt{Dropout} layer with rate 0.5 regularizes the model.
+The output layer is a single \texttt{Dense} unit with sigmoid
+activation for binary classification.
+The model is compiled with binary cross-entropy loss and the Adam
+optimizer at a learning rate of $1 \times 10^{-4}$.
+The total parameter count is 11{,}169{,}601 (11{,}169{,}345 trainable).
+
+\begin{figure*}[!ht] \centering \includegraphics[width=\textwidth]{Figures/cnn_architecture.png} \caption{Architecture of the proposed Custom CNN model used for pneumonia detection.} \label{fig:cnn_architecture} \end{figure*}
+
+\subsubsection{MobileNetV2 Transfer-Learning Model}
+The MobileNetV2 backbone pre-trained on ImageNet was loaded with
+\texttt{include\_top=False} and \texttt{weights='imagenet'}, removing
+the original 1000-class classification head~\cite{mobilenetv2}.
+The backbone weights were initially frozen (\texttt{trainable=False})
+to preserve the pre-trained representations during the early training
+phase.
+A \texttt{GlobalAveragePooling2D} layer was added to reduce spatial
+feature maps to a single vector.
+A \texttt{Dense} layer with 128 units and ReLU activation provides
+domain-specific feature transformation.
+A \texttt{Dropout} layer with rate 0.5 prevents overfitting.
+The output layer is a single sigmoid unit for binary classification.
+The full model was compiled with binary cross-entropy loss and the
+Adam optimizer at a learning rate of $1 \times 10^{-4}$.
+The total parameter count is 2{,}422{,}081, of which 164{,}097 are
+trainable and 2{,}257{,}984 are frozen backbone weights.
+
+\subsubsection{Feature Extraction and Fine-Tuning Strategy}
+Both models used the Adam optimizer at an identical initial learning
+rate to ensure a fair comparison.
+For MobileNetV2, the backbone was entirely frozen in the initial
+training phase, implementing pure feature extraction.
+Fine-tuning with partial backbone unfreezing was not performed in the
+current study and is identified as a direction for future work.
+
+%%---------------------------------------------------------------------------
+\subsection{Training Procedure}
+%%---------------------------------------------------------------------------
+
+\subsubsection{Loss Function}
+Binary cross-entropy was selected as the loss function for both models,
+defined as:
+\begin{equation}
+  \mathcal{L} = -\frac{1}{N}\sum_{i=1}^{N}
+    \bigl[y_i \log(\hat{y}_i) + (1-y_i)\log(1-\hat{y}_i)\bigr]
+  \label{Eq:BinaryCrossEntropy}
+\end{equation}
+where $y_i \in \{0,1\}$ is the true label for sample $i$,
+$\hat{y}_i \in (0,1)$ is the sigmoid output of the model,
+and $N$ is the total number of samples in the batch.
+Binary cross-entropy is appropriate because the task involves
+mutually exclusive binary labels.
+
+\subsubsection{Optimizer and Learning Rate}
+The Adam optimizer~\cite{tensorflow} was used for both models with an
+initial learning rate of $\alpha = 1 \times 10^{-4}$.
+Adam combines adaptive per-parameter learning rates with momentum
+estimates, providing robust convergence on medical imaging tasks with
+relatively small datasets.
+No learning-rate schedule or weight decay was applied in the base
+experiment.
+
+\subsubsection{Training Controls}
+The custom CNN was trained for 10 epochs with a batch size of 32.
+MobileNetV2 was trained for 5 epochs with a batch size of 32.
+No early stopping was applied; training was run to the maximum epoch
+count.
+Models were evaluated on the validation generator at each epoch.
+A fixed random seed was used to ensure reproducibility.
+
+\subsubsection{Hyperparameter Settings}
+Table~\ref{tab:Hyperparams} summarizes the complete hyperparameter
+configuration for both models.
+
+\begin{table}[!ht]
+\centering
+\caption{Hyperparameter configuration for the custom CNN and
+MobileNetV2 models. Both models share identical optimizer settings
+to ensure a fair comparative evaluation.}
+\label{tab:Hyperparams}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Hyperparameter} & \textbf{Custom CNN} & \textbf{MobileNetV2} \\
+\hline
+Input size              & $224 \times 224 \times 3$ & $224 \times 224 \times 3$ \\
+Batch size              & 32        & 32        \\
+Epochs                  & 10        & 5         \\
+Optimizer               & Adam      & Adam      \\
+Learning rate           & $1\times10^{-4}$ & $1\times10^{-4}$ \\
+Loss function           & Binary cross-entropy & Binary cross-entropy \\
+Output activation       & Sigmoid   & Sigmoid   \\
+Dropout rate            & 0.5       & 0.5       \\
+Dense units (head)      & 128       & 128       \\
+Backbone frozen         & N/A       & Yes       \\
+\hline
+\end{tabular}
+\end{table}
+
+%%---------------------------------------------------------------------------
+\subsection{Evaluation Framework}
+%%---------------------------------------------------------------------------
+
+\subsubsection{Primary Predictive Metrics}
+The following metrics are computed on the held-out test set.
+
+\textbf{Accuracy} measures the proportion of all test images correctly
+classified:
+\begin{equation}
+  \text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}
+  \label{Eq:Accuracy}
+\end{equation}
+where $TP$ denotes correctly identified PNEUMONIA cases, $TN$ denotes
+correctly identified NORMAL cases, $FP$ denotes NORMAL cases predicted
+as PNEUMONIA, and $FN$ denotes PNEUMONIA cases predicted as NORMAL.
+
+\textbf{Precision} measures the fraction of PNEUMONIA predictions that
+are correct:
+\begin{equation}
+  \text{Precision} = \frac{TP}{TP + FP}
+  \label{Eq:Precision}
+\end{equation}
+
+\textbf{Recall (Sensitivity)} measures the fraction of true PNEUMONIA
+cases detected:
+\begin{equation}
+  \text{Recall} = \frac{TP}{TP + FN}
+  \label{Eq:Recall}
+\end{equation}
+
+\textbf{F1-score} is the harmonic mean of precision and recall:
+\begin{equation}
+  F_1 = 2 \cdot \frac{\text{Precision} \times \text{Recall}}
+                     {\text{Precision} + \text{Recall}}
+  \label{Eq:F1}
+\end{equation}
+
+\textbf{Specificity} measures the fraction of true NORMAL cases
+correctly identified:
+\begin{equation}
+  \text{Specificity} = \frac{TN}{TN + FP}
+  \label{Eq:Specificity}
+\end{equation}
+
+In the clinical context, recall (sensitivity) for PNEUMONIA is of
+particular importance, as false negatives represent missed diagnoses
+with potentially life-threatening consequences.
+
+\subsubsection{Class-Level Evaluation}
+Per-class precision, recall, and F1-score are computed from the
+sklearn \texttt{classification\_report}.
+Confusion matrices are generated for both models to visualize
+true positive, true negative, false positive, and false negative
+counts.
+
+\subsubsection{Training Behaviour}
+Training and validation accuracy and loss are plotted across all
+epochs to assess convergence rate, stability, and signs of overfitting
+(i.e., divergence between training and validation curves).
+
+\subsubsection{Computational Efficiency}
+The total parameter count for each model is recorded from the
+\texttt{model.summary()} output.
+Training time per epoch and total training time are reported where
+recorded.
+Test loss is used as a summary measure of generalization quality
+alongside accuracy.
+
+%%---------------------------------------------------------------------------
+\subsection{Software, Hardware, and Reproducibility}
+%%---------------------------------------------------------------------------
+All experiments were implemented in Python 3.10 using TensorFlow 2.x~\cite{tensorflow}
+and Keras~\cite{keras}.
+Additional libraries include NumPy, Pandas, Matplotlib, Seaborn,
+and Scikit-learn.
+Training was conducted on Kaggle with GPU acceleration (NVIDIA Tesla T4).
+The complete code, including notebook and saved model weights, is
+available in the project repository.
+
+Model weights were saved in HDF5 format (\texttt{.h5}) for inspection
+and reuse.
+
+%%---------------------------------------------------------------------------
+\subsection{Ethical and Practical Considerations}
+%%---------------------------------------------------------------------------
+The dataset used in this study was collected under institutional
+review board approval by the original researchers and does not contain
+any personally identifiable patient information~\cite{kermany2018}.
+All images are anonymized chest radiographs and their use for
+non-commercial research purposes is permitted under the CC BY 4.0
+license.
+The models developed in this study are intended as screening-support
+tools only and should not replace clinical judgment by a qualified
+radiologist.
+False negative predictions, in which a pneumonia-positive patient is
+classified as normal, carry severe clinical consequences and must be
+flagged as a critical risk in any deployment scenario.
+Human oversight must be maintained in all clinical applications, and
+the model should be validated on locally acquired data before
+deployment in a specific clinical environment.
+Potential sources of demographic or equipment bias in the training
+dataset should be investigated before real-world deployment.
+
+%%===========================================================================
+\section{Results}
+%%===========================================================================
+Results are organized by research question.
+All metrics are reported on the held-out 624-image test set unless
+otherwise stated.
+
+%%---------------------------------------------------------------------------
+\subsection{Dataset and Preprocessing Results (RQ1)}
+%%---------------------------------------------------------------------------
+The training set contains 5{,}216 images: 1{,}341 NORMAL and 3{,}875
+PNEUMONIA, representing a 2.9:1 class imbalance.
+The validation set contains 16 images and the test set 624 images
+(234 NORMAL, 390 PNEUMONIA).
+All 5{,}863 images were successfully loaded without corruption errors.
+After resizing to $224 \times 224$ pixels and normalizing to $[0,1]$,
+images were passed directly to the data generators.
+
+
+\begin{figure}[!ht] \centering \includegraphics[width=0.7\linewidth]{Figures/class_distribution.png} \caption{Distribution of chest X-ray images in the training dataset.} \label{fig:class_distribution} \end{figure}
+\begin{figure}[!ht] \centering \includegraphics[width=0.8\linewidth]{Figures/augmentation_examples.png} \caption{Examples of augmented chest X-ray images generated during training.} \label{fig:augmentation} \end{figure}
+
+%%---------------------------------------------------------------------------
+\subsection{Training and Convergence Results}
+%%---------------------------------------------------------------------------
+Training curves for both models are shown in Figure~\ref{fig:training_curves}.
+The custom CNN was trained for 10 epochs; training accuracy rose
+steadily from approximately 87\% in epoch 1 to above 91\% by epoch 3,
+while validation accuracy fluctuated between 75\% and 81\% throughout,
+indicating that the small 16-image validation set introduces high
+variance in epoch-level monitoring.
+MobileNetV2 converged more rapidly over 5 epochs, reaching training
+accuracy above 93\% by epoch 3 with validation accuracy of 87.5\%,
+suggesting that the pre-trained ImageNet features provide a stronger
+initialization and require fewer parameter updates to adapt to the
+pneumonia classification task.
+
+\begin{figure*}[!ht] \centering  \includegraphics[width=0.48\textwidth]{Figures/cnn_accuracy_loss.png} \hfill \includegraphics[width=0.48\textwidth]{Figures/mobilenet_accuracy_loss.png}  \caption{Training and validation accuracy and loss curves of the Custom CNN (left) and MobileNetV2 (right).} \label{fig:training_curves} \end{figure*}
+
+%%---------------------------------------------------------------------------
+\subsection{Overall Model Performance (RQ2)}
+%%---------------------------------------------------------------------------
+Table~\ref{tab:ModelComparison} presents the overall performance of
+both models on the held-out test set.
+MobileNetV2 outperforms the custom CNN on both accuracy and test loss,
+achieving 88.46\% accuracy versus 71.47\%, and a substantially lower
+test loss of 0.2419 versus 0.5932.
+The reduction in test loss of 59.2\% indicates superior calibration
+and generalization for MobileNetV2.
+The 17 percentage-point accuracy gap is larger than the difference in
+training-set accuracy suggests, indicating that the custom CNN
+overfits the training distribution and does not generalize as well to
+the held-out test set.
+
+\begin{table}[!ht]
+\centering
+\caption{Overall performance comparison of the custom CNN and
+MobileNetV2 on the 624-image held-out test set.}
+\label{tab:ModelComparison}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Model} & \textbf{Test Accuracy (\%)} & \textbf{Test Loss} \\
+\hline
+Custom CNN   & 71.47 & 0.5932 \\
+MobileNetV2  & 88.46 & 0.2419 \\
+\hline
+\end{tabular}
+\end{table}
+
+%%---------------------------------------------------------------------------
+\subsection{Class-Level Performance (RQ3)}
+%%---------------------------------------------------------------------------
+Table~\ref{tab:ClassMetrics} presents per-class precision, recall, and
+F1-score for both models.
+Confusion matrices are shown in Figure~\ref{fig:confusion_matrices}.
+
+The custom CNN exhibits a severe class-prediction bias: it achieves
+near-perfect recall for NORMAL (0.99) but only 0.55 recall for
+PNEUMONIA, meaning it misses 45\% of true pneumonia cases.
+This pattern is consistent with the model collapsing toward predicting
+the NORMAL class for ambiguous inputs, despite class-weight
+compensation.
+The overall accuracy of 71.47\% is therefore misleading as a
+standalone metric: the model fails on the clinically critical class.
+
+MobileNetV2 produces a well-balanced result. PNEUMONIA recall of 0.96
+means only 4\% of true pneumonia cases are missed, a substantial
+improvement over the custom CNN.
+NORMAL precision of 0.92 indicates few false alarms.
+The weighted F1-score of 0.88 confirms consistently strong performance
+across both classes.
+
+\begin{table}[!ht]
+\centering
+\caption{Per-class precision, recall, and F1-score for the custom CNN
+and MobileNetV2 on the held-out test set. NORMAL = class 0;
+PNEUMONIA = class 1. Values are rounded to two decimal places.}
+\label{tab:ClassMetrics}
+\begin{tabular}{|l|l|c|c|c|}
+\hline
+\textbf{Model} & \textbf{Class} &
+\textbf{Precision} & \textbf{Recall} & \textbf{F1-score} \\
+\hline
+Custom CNN   & NORMAL    & 0.57 & 0.99 & 0.72 \\
+             & PNEUMONIA & 0.99 & 0.55 & 0.71 \\
+\hline
+MobileNetV2  & NORMAL    & 0.92 & 0.76 & 0.83 \\
+             & PNEUMONIA & 0.87 & 0.96 & 0.91 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure*}[!ht] \centering \includegraphics[width=0.45\textwidth]{Figures/cnn_confusion_matrix.png} \hfill \includegraphics[width=0.45\textwidth]{Figures/mobilenet_confusion_matrix.png} \caption{Confusion matrices for the Custom CNN (left) and MobileNetV2 (right) on the 624-image held-out test set.} \label{fig:confusion_matrices} \end{figure*}
+
+%%---------------------------------------------------------------------------
+\subsection{Efficiency and Deployment Results (RQ4)}
+%%---------------------------------------------------------------------------
+Table~\ref{tab:Efficiency} summarizes the computational characteristics
+of both models.
+MobileNetV2 has substantially fewer total parameters (2.42M versus
+11.17M), of which only 164K are trainable in the frozen-backbone
+configuration.
+Despite having fewer trainable parameters, MobileNetV2 achieves higher
+accuracy, confirming that the ImageNet pre-trained features provide
+efficient domain-relevant representations.
+The smaller trainable parameter count also reduces the risk of
+overfitting, consistent with the lower test loss observed.
+MobileNetV2 required only 5 training epochs to converge compared with
+10 for the custom CNN, resulting in a shorter overall training
+duration.
+These characteristics make MobileNetV2 more attractive for deployment
+in resource-constrained settings where training time and model
+complexity are practical constraints.
+
+\begin{table}[!ht]
+\centering
+\caption{Computational efficiency comparison of the custom CNN and
+MobileNetV2.}
+\label{tab:Efficiency}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Metric} & \textbf{Custom CNN} & \textbf{MobileNetV2} \\
+\hline
+Total parameters      & 11{,}169{,}601 & 2{,}422{,}081 \\
+Trainable parameters  & 11{,}169{,}345 & 164{,}097     \\
+Frozen parameters     & 256            & 2{,}257{,}984  \\
+Training epochs       & 10             & 5              \\
+Test accuracy (\%)    & 71.47          & 88.46          \\
+Test loss             & 0.5932         & 0.2419         \\
+\hline
+\end{tabular}
+\end{table}
+
+%%===========================================================================
+\section{Discussion}
+%%===========================================================================
+
+%%---------------------------------------------------------------------------
+\subsection{Interpretation of Dataset and Preprocessing Findings (RQ1)}
+%%---------------------------------------------------------------------------
+The 2.9:1 class imbalance in the training set is the most consequential
+dataset characteristic influencing model behavior in this study.
+Without compensation, a model trained on this distribution can achieve
+approximately 74\% accuracy simply by predicting PNEUMONIA for every
+input, since PNEUMONIA accounts for 74\% of training samples.
+Class-weight compensation counteracts this by multiplying the loss
+contribution of each NORMAL sample by a factor of approximately 1.93,
+making errors on the minority class proportionally more costly during
+gradient updates.
+Despite this compensation, the custom CNN still collapsed toward
+majority-class prediction at test time, suggesting that class weighting
+alone is insufficient when the model architecture lacks the capacity
+to form a robust decision boundary on a small and imbalanced dataset.
+MobileNetV2's pre-trained features appear to mitigate this effect by
+providing a more discriminative initialization that the classification
+head can exploit even with limited labeled data.
+
+The 16-image validation set is a significant inherited limitation of
+the original dataset structure.
+With only 8 images per class, a single misclassified image moves
+validation accuracy by 6.25 percentage points, introducing high
+variance in epoch-level monitoring that makes early stopping or
+learning-rate scheduling unreliable.
+The fluctuation between 75\% and 87.5\% in validation accuracy across
+epochs for both models is almost certainly attributable to this small
+sample size rather than genuine generalization differences between
+epochs.
+Future work using this dataset should construct a larger stratified
+validation split, for example by reserving 10\% of the training set,
+to obtain more stable epoch-level performance estimates.
+
+%%---------------------------------------------------------------------------
+\subsection{Comparative Performance of CNN Models (RQ2)}
+%%---------------------------------------------------------------------------
+The 17 percentage-point accuracy advantage of MobileNetV2 over the
+custom CNN (88.46\% vs.\ 71.47\%) is substantially larger than
+typically reported in transfer-learning comparisons on this dataset,
+and reflects the difficulty of training a CNN from random
+initialization on a relatively small and imbalanced dataset.
+The more striking difference is in test loss (0.2419 vs.\ 0.5932),
+indicating that MobileNetV2 produces better-calibrated probability
+estimates, which is clinically important for threshold selection.
+The custom CNN, trained from random initialization on approximately
+5{,}000 images, achieves only 71.47\% accuracy and collapses toward
+NORMAL class prediction despite class-weight compensation, suggesting
+that the class imbalance and limited dataset size exceed the capacity
+of the architecture to generalize reliably.
+The depthwise separable convolution architecture and
+ImageNet-derived edge and texture detectors of MobileNetV2 appear
+to capture lung opacity patterns more efficiently~\cite{mobilenetv2}.
+MobileNetV2 also required only 5 training epochs to converge compared
+with 10 for the custom CNN, suggesting faster adaptation to the domain.
+
+%%---------------------------------------------------------------------------
+\subsection{Class-Level Reliability and Error Patterns (RQ3)}
+%%---------------------------------------------------------------------------
+The most clinically significant finding is the custom CNN's low PNEUMONIA
+recall of 0.55, meaning that nearly half of all true pneumonia cases
+in the test set were misclassified as NORMAL.
+In a clinical screening context, such false negatives represent missed
+diagnoses and could delay life-saving treatment.
+By contrast, MobileNetV2 achieves a PNEUMONIA recall of 0.96, reducing
+the missed-pneumonia rate to approximately 4\% of cases.
+The custom CNN's near-perfect NORMAL recall (0.99) alongside poor
+PNEUMONIA recall indicates the model has effectively learned to predict
+NORMAL for the majority of inputs, a known failure mode when class
+imbalance is not adequately compensated.
+MobileNetV2's more balanced precision and recall across both classes
+(NORMAL: 0.92/0.76; PNEUMONIA: 0.87/0.96) indicates a more robust
+decision boundary that does not collapse toward either class.
+
+%%---------------------------------------------------------------------------
+\subsection{Efficiency and Practical Deployment (RQ4)}
+%%---------------------------------------------------------------------------
+MobileNetV2 offers a favorable efficiency-performance trade-off compared
+with the custom CNN.
+Its total parameter count of 2.42 million is less than a quarter of
+the custom CNN's 11.17 million, yet it achieves substantially higher
+accuracy and lower loss.
+The frozen backbone configuration means that only 164{,}097 parameters
+required gradient updates during training, significantly reducing
+memory requirements and training time.
+These properties make MobileNetV2 a strong candidate for deployment in
+low-resource clinical environments, including settings with limited
+GPU availability or where inference must run on edge hardware.
+Future work should benchmark inference latency on mobile or embedded
+devices to confirm practical deployment feasibility.
+
+%%---------------------------------------------------------------------------
+\subsection{Comparison with Existing Literature}
+%%---------------------------------------------------------------------------
+MobileNetV2's test accuracy of 88.46\% on the original Kaggle split is
+consistent with published transfer-learning results on the same dataset.
+Chouhan et al.\ reported 90.0\% accuracy with fine-tuned VGG16, though
+their study did not apply class-weight compensation and reported no
+per-class recall figures, making the comparison partially
+opaque~\cite{chouhan2020}.
+Liang and Zheng achieved 89.2\% accuracy with ResNet50 using a custom
+augmentation pipeline~\cite{liang2020}; the marginal gap relative to the
+present MobileNetV2 result is consistent with MobileNetV2 being a
+lighter architecture with fewer parameters, and suggests that the
+efficiency advantage of MobileNetV2 comes at a small but acceptable
+accuracy cost.
+Reshan et al.\ demonstrated that DenseNet121 with class-weight
+balancing achieved higher per-class AUC than models trained without
+balancing on the same dataset, corroborating the present finding that
+class-imbalance treatment is necessary for reliable minority-class
+recall~\cite{reshan2023}.
+
+The custom CNN's 71.47\% test accuracy is lower than most published
+results for custom architectures on this dataset, which typically
+report 80--85\% accuracy.
+This discrepancy is likely attributable to the absence of fine-tuned
+augmentation strategy and the relatively shallow three-block
+architecture, which has limited capacity to learn discriminative
+features from a small imbalanced dataset.
+The PNEUMONIA recall of 0.55 is particularly concerning and
+underscores a finding consistent with Hashmi et al., who reported
+that models trained without class compensation on this dataset
+frequently exhibit low sensitivity on the NORMAL class or vice
+versa despite acceptable overall accuracy~\cite{hashmi2020}.
+Direct numerical comparison with all cited studies is complicated by
+differences in dataset splitting strategy; the present study strictly
+uses the original held-out test set, whereas some published results
+are reported on reshuffled or cross-validated splits that are not
+directly comparable.
+
+%%---------------------------------------------------------------------------
+\subsection{Practical and Scientific Contributions}
+%%---------------------------------------------------------------------------
+\textbf{Scientific Contributions.}
+This study provides a systematic and reproducible comparison of a
+custom CNN and a transfer-learning model on the same dataset split,
+preprocessing pipeline, and evaluation protocol, addressing the
+inconsistency that limits cross-study comparison in the existing
+literature~\cite{hashmi2020,reshan2023}.
+Class-weight compensation for training-set imbalance is reported
+explicitly and its effect on minority-class recall is analyzed.
+The large gap in PNEUMONIA recall between the two models (0.55 versus
+0.96) highlights the clinical risk of relying on overall accuracy alone
+as an evaluation metric.
+
+\textbf{Practical Contributions.}
+MobileNetV2 achieves 88.46\% test accuracy with a low test loss of
+0.2419 using only 5 training epochs and fewer than 165{,}000 trainable
+parameters, suggesting suitability as a fast-training screening-support
+tool in settings where radiologist availability is limited~\cite{chouhan2020}.
+Grad-CAM and SHAP explainability analysis are identified as high-priority
+extensions that would further support clinical adoption of the model.
+
+%%---------------------------------------------------------------------------
+\subsection{Ethical, Social, and Safety Implications}
+%%---------------------------------------------------------------------------
+The proposed system is intended as a clinical decision-support tool
+and must not be used as a standalone diagnostic device without
+radiologist review.
+False negative predictions (missed pneumonia) are the highest-risk
+error type and should trigger mandatory clinical escalation in any
+deployment protocol.
+The training dataset originates from a single hospital and may not
+represent the demographic or equipment diversity of all clinical
+environments, introducing potential generalization bias~\cite{kermany2018}.
+Deployment in a new clinical site requires local validation on
+site-specific images before clinical use.
+Model predictions should be communicated to clinicians alongside
+uncertainty information, not as deterministic labels.
+
+%%---------------------------------------------------------------------------
+\subsection{Limitations}
+%%---------------------------------------------------------------------------
+The study uses a single public dataset from one institution, limiting
+generalizability to different scanner types, patient demographics, and
+radiograph acquisition protocols.
+The original validation split contains only 16 images, which is
+insufficient for reliable epoch-level model selection; future work
+should use a larger stratified validation split.
+MobileNetV2 was evaluated only in the frozen feature-extraction
+configuration; fine-tuning deeper layers could further improve
+performance and is left as future work~\cite{mobilenetv2}.
+No external validation dataset was used, so the model's out-of-distribution
+performance remains unknown.
+Grad-CAM and SHAP explainability methods were not implemented in this
+study; they are proposed as a priority direction for future work to
+assess whether model attention corresponds to clinically relevant lung
+regions.
+Statistical significance testing between model performance differences
+was not conducted; the observed accuracy gap may or may not be
+statistically significant given the test-set size.
+
+%%---------------------------------------------------------------------------
+\subsection{Future Research Directions}
+%%---------------------------------------------------------------------------
+Future work should implement Grad-CAM and SHAP explainability analysis
+to assess whether MobileNetV2 attends to clinically meaningful lung
+opacity regions, and to identify any evidence of shortcut learning.
+MobileNetV2 fine-tuning with partial or full backbone unfreezing should
+be evaluated to assess whether further performance improvements are
+achievable.
+External validation on a second chest X-ray dataset, such as NIH
+ChestX-ray14 or CheXpert, would establish the model's
+out-of-distribution robustness.
+Additional transfer-learning architectures including DenseNet121~\cite{huang2017densenet},
+EfficientNetB0, and ResNet50~\cite{he2016resnet} should be compared within the same
+experimental framework.
+Multi-class extension to distinguish bacterial pneumonia, viral
+pneumonia, COVID-19, and normal chest X-rays would significantly
+increase clinical utility.
+Domain-expert radiologist evaluation of explanation outputs would
+provide clinically grounded validation of model trustworthiness.
+
+%%===========================================================================
+\section{Conclusion}
+%%===========================================================================
+This study addressed the problem of automatically classifying chest
+X-ray images as NORMAL or PNEUMONIA using a comparative CNN-based
+framework.
+A custom three-block CNN was trained as a baseline and compared with a
+MobileNetV2 transfer-learning model on the publicly available
+Chest X-Ray Images (Pneumonia) dataset containing 5{,}863 images~\cite{kermany2018}.
+MobileNetV2 achieved the superior overall performance with a test
+accuracy of 88.46\% and a test loss of 0.2419, outperforming the
+custom CNN (71.47\% accuracy, loss 0.5932) by 17 percentage points and
+reducing test loss by 59\%.
+The most clinically significant finding is MobileNetV2's PNEUMONIA
+recall of 0.96, compared with 0.55 for the custom CNN, indicating that
+transfer learning substantially reduces the rate of missed pneumonia
+diagnoses.
+The practical contribution of this work is a reproducible and
+computationally efficient pipeline that could assist radiograph
+screening in resource-constrained clinical settings.
+The principal limitations are reliance on a single institutional
+dataset with a very small validation split, and the absence of
+Grad-CAM and SHAP explainability analysis, which are proposed as
+priority directions for future work.
+
+\bibliographystyle{elsarticle-num}
+\bibliography{Bibliography}
+
+\end{document}
